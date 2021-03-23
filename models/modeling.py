@@ -57,6 +57,8 @@ class Attention(nn.Module):
         self.attention_head_size = int(config.hidden_size / self.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
+        # 根据同一个feature map分别计算query key value
+        # parallize 每一个patch的编码特征纬度 hidden_size
         self.query = Linear(config.hidden_size, self.all_head_size)
         self.key = Linear(config.hidden_size, self.all_head_size)
         self.value = Linear(config.hidden_size, self.all_head_size)
@@ -70,6 +72,7 @@ class Attention(nn.Module):
     def transpose_for_scores(self, x):
         new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
         x = x.view(*new_x_shape)
+        # N num_head len_q hidden_size
         return x.permute(0, 2, 1, 3)
 
     def forward(self, hidden_states):
@@ -77,10 +80,12 @@ class Attention(nn.Module):
         mixed_key_layer = self.key(hidden_states)
         mixed_value_layer = self.value(hidden_states)
 
+        # transpose to multi-head
         query_layer = self.transpose_for_scores(mixed_query_layer)
         key_layer = self.transpose_for_scores(mixed_key_layer)
         value_layer = self.transpose_for_scores(mixed_value_layer)
 
+        # N num_head l
         attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
         attention_scores = attention_scores / math.sqrt(self.attention_head_size)
         attention_probs = self.softmax(attention_scores)
@@ -99,7 +104,7 @@ class Attention(nn.Module):
 class Mlp(nn.Module):
     def __init__(self, config):
         super(Mlp, self).__init__()
-        self.fc1 = Linear(config.hidden_size, config.transformer["mlp_dim"])
+        self.fc1 = Linear(config.hidden_size, config.transformer["mlp_dim"])        # 两层全连接层
         self.fc2 = Linear(config.transformer["mlp_dim"], config.hidden_size)
         self.act_fn = ACT2FN["gelu"]
         self.dropout = Dropout(config.transformer["dropout_rate"])
@@ -122,7 +127,8 @@ class Mlp(nn.Module):
 
 
 class Embeddings(nn.Module):
-    """Construct the embeddings from patch, position embeddings.
+    """
+    Construct the embeddings from patch, position embeddings.
     """
     def __init__(self, config, img_size, in_channels=3):
         super(Embeddings, self).__init__()
@@ -143,10 +149,14 @@ class Embeddings(nn.Module):
             self.hybrid_model = ResNetV2(block_units=config.resnet.num_layers,
                                          width_factor=config.resnet.width_factor)
             in_channels = self.hybrid_model.width * 16
+        # hidden_size encoder feature dimention
         self.patch_embeddings = Conv2d(in_channels=in_channels,
                                        out_channels=config.hidden_size,
                                        kernel_size=patch_size,
                                        stride=patch_size)
+                                       # 相当于每一个patch只输出一个值
+                                       # N D patch_num patch_num
+        # extra learnable [class] embedding
         self.position_embeddings = nn.Parameter(torch.zeros(1, n_patches+1, config.hidden_size))
         self.cls_token = nn.Parameter(torch.zeros(1, 1, config.hidden_size))
 
@@ -159,7 +169,7 @@ class Embeddings(nn.Module):
         if self.hybrid:
             x = self.hybrid_model(x)
         x = self.patch_embeddings(x)
-        x = x.flatten(2)
+        x = x.flatten(2)            # flatten the patch embedding N*D*patch_num
         x = x.transpose(-1, -2)
         x = torch.cat((cls_tokens, x), dim=1)
 
@@ -181,7 +191,7 @@ class Block(nn.Module):
         h = x
         x = self.attention_norm(x)
         x, weights = self.attn(x)
-        x = x + h
+        x = x + h       # residual connection
 
         h = x
         x = self.ffn_norm(x)
@@ -345,3 +355,9 @@ CONFIGS = {
     'R50-ViT-B_16': configs.get_r50_b16_config(),
     'testing': configs.get_testing(),
 }
+
+if __name__ == '__main__':
+    input = randn(1, 3, 256, 256)
+    model = VisionTransformer(configs.get_testing, img_size=256, num_classes=6)
+    logits, atten = model(input)
+
