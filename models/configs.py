@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# import ml_collections
+# from ml_collections.ml_collections improt co
+# import ml_collections.ml_collections as ml_collections
 import ml_collections
-
 
 def get_testing():
     """Returns a minimal configuration for testing."""

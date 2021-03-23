@@ -17,9 +17,15 @@ from torch.nn import CrossEntropyLoss, Dropout, Softmax, Linear, Conv2d, LayerNo
 from torch.nn.modules.utils import _pair
 from scipy import ndimage
 
-import models.configs as configs
+import sys
+sys.path.append('../models')
+sys.path.append('./')
 
-from .modeling_resnet import ResNetV2
+# import models.configs as configs
+from models import configs
+
+# from .modeling_resnet import ResNetV2
+from models.modeling_resnet import ResNetV2
 
 
 logger = logging.getLogger(__name__)
@@ -200,7 +206,7 @@ class Block(nn.Module):
         return x, weights
 
     def load_from(self, weights, n_block):
-        ROOT = f"Transformer/encoderblock_{n_block}"
+        ROOT = "Transformer/encoderblock_{n_block}"
         with torch.no_grad():
             query_weight = np2th(weights[pjoin(ROOT, ATTENTION_Q, "kernel")]).view(self.hidden_size, self.hidden_size).t()
             key_weight = np2th(weights[pjoin(ROOT, ATTENTION_K, "kernel")]).view(self.hidden_size, self.hidden_size).t()
@@ -274,6 +280,7 @@ class VisionTransformer(nn.Module):
         super(VisionTransformer, self).__init__()
         self.num_classes = num_classes
         self.zero_head = zero_head
+        print(config)
         self.classifier = config.classifier
 
         self.transformer = Transformer(config, img_size, vis)
@@ -357,7 +364,9 @@ CONFIGS = {
 }
 
 if __name__ == '__main__':
-    input = randn(1, 3, 256, 256)
-    model = VisionTransformer(configs.get_testing, img_size=256, num_classes=6)
+    input = torch.randn(1, 3, 256, 256)
+    config = configs.get_testing()
+    print(config.classifier)
+    model = VisionTransformer(config, img_size=256, num_classes=6)
     logits, atten = model(input)
 

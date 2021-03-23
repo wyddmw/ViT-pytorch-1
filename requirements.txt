@@ -1,5 +1,6 @@
-torch
-numpy
-tqdm
-tensorboard
-ml-collections
+absl-py
+PyYAML
+six
+contextlib2
+dataclasses;python_version<'3.7'
+typing;python_version<'3.5'
